@@ -1,0 +1,9 @@
+# Nested loops: 4 squares rotated around the origin
+REPEAT 4 {
+    REPEAT 4 {
+        FORWARD 15;
+        RIGHT 90;
+    }
+    RIGHT 90;
+}
+

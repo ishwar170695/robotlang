@@ -1,0 +1,5 @@
+# Syntax error: unmatched closing brace
+FORWARD 5;
+}
+RIGHT 90;
+

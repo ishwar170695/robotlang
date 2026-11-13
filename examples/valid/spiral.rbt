@@ -1,0 +1,8 @@
+# Square spiral using variables and arithmetic expressions
+SET side = 4;
+REPEAT 10 {
+    FORWARD side;
+    RIGHT 90;
+    SET side = side + 4;
+}
+

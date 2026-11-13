@@ -1,0 +1,6 @@
+# 5-pointed star: 144 degree exterior turn
+REPEAT 5 {
+    FORWARD 30;
+    RIGHT 144;
+}
+

@@ -1,0 +1,4 @@
+# Semantic error: robot leaves the 100x100 arena [-50, 50] x [-50, 50]
+FORWARD 30;
+FORWARD 30;
+

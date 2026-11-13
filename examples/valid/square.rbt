@@ -1,0 +1,6 @@
+# Classic square: returns to (0, 0) with heading 0
+REPEAT 4 {
+    FORWARD 20;
+    RIGHT 90;
+}
+

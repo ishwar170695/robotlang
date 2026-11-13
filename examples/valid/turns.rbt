@@ -1,0 +1,7 @@
+# Turning and moving backward
+FORWARD 15;
+RIGHT 90;
+FORWARD 10;
+LEFT 90;
+BACKWARD 5;
+

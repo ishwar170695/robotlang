@@ -1,0 +1,5 @@
+# Syntax error: missing semicolon (panic-mode recovery continues to line 4)
+FORWARD 5
+RIGHT 90;
+FORWARD 3
+

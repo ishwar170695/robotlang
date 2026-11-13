@@ -1,0 +1,8 @@
+# Zig-zag patrol path using repeated alternating turns
+REPEAT 4 {
+    FORWARD 10;
+    RIGHT 90;
+    FORWARD 10;
+    LEFT 90;
+}
+

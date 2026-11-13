@@ -1,0 +1,8 @@
+# Semantic errors: REPEAT 0 and REPEAT 2.5
+REPEAT 0 {
+    FORWARD 5;
+}
+REPEAT 2.5 {
+    FORWARD 5;
+}
+

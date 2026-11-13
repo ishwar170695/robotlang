@@ -1,0 +1,18 @@
+# Extension showcase: procedures (DEF/CALL) and conditionals (IF/ELSE)
+DEF box(size) {
+    IF size > 0 {
+        REPEAT 4 {
+            FORWARD size;
+            RIGHT 90;
+        }
+    } ELSE {
+        FORWARD 1;
+    }
+}
+
+CALL box(10);
+RIGHT 90;
+FORWARD 15;
+LEFT 90;
+CALL box(15);
+

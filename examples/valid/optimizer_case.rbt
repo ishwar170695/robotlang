@@ -1,0 +1,11 @@
+# Optimizer showcase: merges consecutive moves/turns and drops no-ops
+FORWARD 2;
+FORWARD 3;
+FORWARD 0;
+RIGHT 90;
+RIGHT 90;
+RIGHT 360;
+FORWARD 5;
+LEFT 90;
+RIGHT 90;
+

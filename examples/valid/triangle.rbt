@@ -1,0 +1,6 @@
+# Equilateral triangle: exterior turn = 120 degrees
+REPEAT 3 {
+    FORWARD 25;
+    RIGHT 120;
+}
+
