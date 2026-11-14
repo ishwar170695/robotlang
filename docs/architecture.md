@@ -11,7 +11,7 @@ flowchart LR
     IR -->|Structured IR| Unroll["Loop Expander\n(unroll_ir)"]
     Unroll -->|Flat IR| Opt["Peephole Optimizer\n(optimizer.py)"]
     Opt -->|Optimized Flat IR| CG["Code Generator\n(codegen.py)"]
-    CG -->|Robot Commands| Sim["Virtual Robot VM + Plotter\n(simulator.py)"]
+    CG -->|PIC16F877A Assembly| Sim["PIC16 Simulator + Plotter\n(simulator.py)"]
 ```
 
 ## Stage Responsibilities
@@ -28,7 +28,7 @@ flowchart LR
    - Structured IR preserves static loops with `LOOP_BEGIN n` / `LOOP_END`.
    - `unroll_ir` expands loops into a flat linear instruction stream (`MOVE`, `TURN`).
 5. **Optimizer (`robotlang/optimizer.py`)**: Fixed-point peephole pass merging consecutive same-direction moves, merging consecutive turns, and removing `MOVE 0` and `TURN 360`/`0` no-ops, reporting before/after counts.
-6. **Codegen & Simulator (`robotlang/codegen.py`, `robotlang/simulator.py`)**: Emits `MOVE` and `ROTATE` commands, executes them in the virtual robot VM (`x += d * sin(heading)`, `y += d * cos(heading)`), records an execution trace table, and plots via `matplotlib` (interactive window or PNG/SVG export).
+6. **Codegen & Simulator (`robotlang/codegen.py`, `robotlang/simulator.py`)**: Emits Microchip PIC16F877A (`pic-as`) assembly with `PORTB` initialization, chunked 8-bit `MOVLW`/`CALL` motor commands (`MOVE_FWD`, `MOVE_BWD`, `TURN_RIGHT`, `TURN_LEFT`), and delay subroutines; interprets those `MOVLW`/`CALL` instructions in the simulator (`x += d * sin(heading)`, `y += d * cos(heading)`), records an execution trace table, and plots via `matplotlib` (interactive window or PNG/SVG export).
 
 ## Viva Quick Reference
 

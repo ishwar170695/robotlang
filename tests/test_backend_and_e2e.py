@@ -7,7 +7,8 @@ import pytest
 from robotlang.cli import main as cli_main
 from robotlang.compiler import compile_source
 from robotlang.ir import format_ir
-from robotlang.simulator import render_matplotlib, simulate_commands
+from robotlang.semantic import ArenaConfig
+from robotlang.simulator import extract_pic_actions, render_matplotlib, simulate_commands
 
 ROOT = Path(__file__).resolve().parent.parent
 VALID_DIR = ROOT / "examples" / "valid"
@@ -34,7 +35,41 @@ def test_optimizer_merges_and_drops_noops():
     assert res.opt_stats is not None
     assert res.opt_stats.before_count == 8
     assert res.opt_stats.after_count == 2
-    assert res.commands == ["MOVE 5.0", "ROTATE 180"]
+    assert "PROCESSOR 16F877A" in "\n".join(res.commands)
+    assert extract_pic_actions(res.commands) == [
+        ("MOVE_FWD", 5.0, "MOVLW 5 -> CALL MOVE_FWD"),
+        ("TURN_RIGHT", 180.0, "MOVLW 180 -> CALL TURN_RIGHT"),
+    ]
+
+
+def test_pic16_chunking_over_255_and_backward_left():
+    src = "FORWARD 300; RIGHT 270; BACKWARD 50; LEFT 90;"
+    res = compile_source(src, arena=ArenaConfig.from_size(800))
+    assert res.success
+    asm_text = "\n".join(res.commands)
+    assert "PSECT resetVec,class=CODE,delta=2,abs" in asm_text
+    assert "DECFSZ 0x20, 1" in asm_text
+    actions = extract_pic_actions(res.commands)
+    assert actions == [
+        ("MOVE_FWD", 255.0, "MOVLW 255 -> CALL MOVE_FWD"),
+        ("MOVE_FWD", 45.0, "MOVLW 45 -> CALL MOVE_FWD"),
+        ("TURN_RIGHT", 255.0, "MOVLW 255 -> CALL TURN_RIGHT"),
+        ("TURN_RIGHT", 15.0, "MOVLW 15 -> CALL TURN_RIGHT"),
+        ("MOVE_BWD", 50.0, "MOVLW 50 -> CALL MOVE_BWD"),
+        ("TURN_LEFT", 90.0, "MOVLW 90 -> CALL TURN_LEFT"),
+    ]
+    sim = simulate_commands(res.commands)
+    assert sim.final_state.x == pytest.approx(50.0, abs=1e-9)
+    assert sim.final_state.y == pytest.approx(300.0, abs=1e-9)
+    assert sim.final_state.heading == pytest.approx(180.0, abs=1e-9)
+
+
+def test_optimizer_reduces_merged_turns_mod_360():
+    res = compile_source("RIGHT 200; RIGHT 200;", optimize=True)
+    assert res.success
+    assert extract_pic_actions(res.commands) == [
+        ("TURN_RIGHT", 40.0, "MOVLW 40 -> CALL TURN_RIGHT"),
+    ]
 
 
 def test_square_returns_to_origin_heading_zero():
@@ -108,7 +143,10 @@ def test_cli_subcommands(capsys):
     assert "LOOP_BEGIN 4" in ir_out and "Unrolled Flat IR" in ir_out
 
     assert cli_main(["asm", sq]) == 0
-    assert "MOVE 20.0" in capsys.readouterr().out
+    asm_out = capsys.readouterr().out
+    assert "PROCESSOR 16F877A" in asm_out
+    assert "MOVLW 20" in asm_out
+    assert "CALL MOVE_FWD" in asm_out
 
     assert cli_main(["run", sq]) == 0
     run_out = capsys.readouterr().out

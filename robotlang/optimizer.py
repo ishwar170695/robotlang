@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from robotlang.ir import IRInstr, IROp, unroll_ir
@@ -75,7 +76,7 @@ def optimize_ir(instructions: list[IRInstr]) -> tuple[list[IRInstr], Optimizatio
                     continue
                 if out and out[-1].op == IROp.TURN:
                     prev_a = float(out[-1].arg or 0.0)
-                    out[-1] = IRInstr(IROp.TURN, prev_a + a, out[-1].pos)
+                    out[-1] = IRInstr(IROp.TURN, math.fmod(prev_a + a, 360.0), out[-1].pos)
                     merged_turns += 1
                     changed = True
                     continue

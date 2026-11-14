@@ -243,6 +243,13 @@ class SemanticAnalyzer:
                     stmt,
                 )
                 return
+            if isinstance(val, float) and not val.is_integer():
+                self._emit(
+                    Severity.WARNING,
+                    f"Fractional move distance {val:g} will be rounded to {int(round(val))} for PIC16 integer codegen",
+                    stmt.pos,
+                    stmt,
+                )
             if not symbolic_mode:
                 d = float(val) if stmt.direction == "FORWARD" else -float(val)
                 rad = math.radians(self.heading)
@@ -272,6 +279,13 @@ class SemanticAnalyzer:
                     stmt,
                 )
                 return
+            if isinstance(val, float) and not val.is_integer():
+                self._emit(
+                    Severity.WARNING,
+                    f"Fractional turn angle {val:g} will be rounded to {int(round(val))} for PIC16 integer codegen",
+                    stmt.pos,
+                    stmt,
+                )
             if not symbolic_mode:
                 delta = float(val) if stmt.direction == "RIGHT" else -float(val)
                 self.heading = (self.heading + delta) % 360.0
@@ -390,6 +404,8 @@ class SemanticAnalyzer:
         if isinstance(stmt, IfStmt):
             if not stmt.then_body:
                 self._emit(Severity.WARNING, "Empty IF block has no effect", stmt.pos, stmt)
+            if stmt.else_body is not None and not stmt.else_body:
+                self._emit(Severity.WARNING, "Empty ELSE block has no effect", stmt.pos, stmt)
             left = self._eval_expr(stmt.left)
             right = self._eval_expr(stmt.right)
             if left is None or right is None:

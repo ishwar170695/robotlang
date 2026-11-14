@@ -11,7 +11,12 @@ from robotlang.ast_nodes import format_ast
 from robotlang.compiler import CompileResult, compile_source
 from robotlang.ir import format_ir
 from robotlang.semantic import ArenaConfig
-from robotlang.simulator import RobotState, Segment, simulate_commands
+from robotlang.simulator import (
+    RobotState,
+    Segment,
+    extract_pic_actions,
+    simulate_commands,
+)
 
 DEFAULT_SCRIPT = "# Write RobotLang here, choose an Example above, or use the Drive Pad.\n"
 
@@ -33,7 +38,7 @@ class RobotPlaygroundApp:
         self.examples = self._discover_examples()
         self.segments: list[Segment] = []
         self.robot_state = RobotState()
-        self.pending_commands: list[str] = []
+        self.pending_commands: list[tuple[str, float, str]] = []
         self.compiled_source: str | None = None
         self.step_index = 0
         self.anim_job: str | None = None
@@ -160,7 +165,7 @@ class RobotPlaygroundApp:
         self.tab_tokens = self._add_tab("Tokens")
         self.tab_ast = self._add_tab("AST")
         self.tab_ir = self._add_tab("IR & Optimizer")
-        self.tab_asm = self._add_tab("Robot Commands")
+        self.tab_asm = self._add_tab("PIC16F877A Assembly")
 
     def _add_tab(self, title: str) -> tk.Text:
         frame = ttk.Frame(self.notebook)
@@ -247,7 +252,7 @@ class RobotPlaygroundApp:
         if result is None:
             return
         self.reset_robot()
-        self.pending_commands = list(result.commands)
+        self.pending_commands = extract_pic_actions(result.commands)
         self.compiled_source = source
         self.step_index = 0
         self._animate_next()
@@ -272,7 +277,7 @@ class RobotPlaygroundApp:
             if result is None:
                 return
             self.reset_robot()
-            self.pending_commands = list(result.commands)
+            self.pending_commands = extract_pic_actions(result.commands)
             self.compiled_source = source
             self.step_index = 0
 
@@ -283,11 +288,11 @@ class RobotPlaygroundApp:
             self._update_hud("Program finished.")
             return
 
-        cmd = self.pending_commands[self.step_index]
+        action = self.pending_commands[self.step_index]
         self.step_index += 1
-        self._apply_robot_command(cmd)
+        self._apply_robot_command(action)
         self._redraw_canvas()
-        self._update_hud(f"Step {self.step_index}/{len(self.pending_commands)}: {cmd}")
+        self._update_hud(f"Step {self.step_index}/{len(self.pending_commands)}: {action[2]}")
 
     def _animate_next(self) -> None:
         if self.step_index >= len(self.pending_commands):
@@ -297,18 +302,17 @@ class RobotPlaygroundApp:
             self.step_index = 0
             self._update_hud("Finished.")
             return
-        cmd = self.pending_commands[self.step_index]
+        action = self.pending_commands[self.step_index]
         self.step_index += 1
-        self._apply_robot_command(cmd)
+        self._apply_robot_command(action)
         self._redraw_canvas()
-        self._update_hud(f"Running {self.step_index}/{len(self.pending_commands)}: {cmd}")
+        self._update_hud(f"Running {self.step_index}/{len(self.pending_commands)}: {action[2]}")
         self.anim_job = self.root.after(max(20, int(self.delay_var.get())), self._animate_next)
 
-    def _apply_robot_command(self, cmd: str) -> None:
-        parts = cmd.split()
-        op = parts[0].upper()
-        if op == "MOVE":
-            d = float(parts[1])
+    def _apply_robot_command(self, action: tuple[str, float, str]) -> None:
+        subroutine, w_val, _label = action
+        if subroutine in ("MOVE_FWD", "MOVE_BWD"):
+            d = w_val if subroutine == "MOVE_FWD" else -w_val
             rad = math.radians(self.robot_state.heading)
             nx = self.robot_state.x + d * math.sin(rad)
             ny = self.robot_state.y + d * math.cos(rad)
@@ -317,8 +321,10 @@ class RobotPlaygroundApp:
             )
             self.robot_state.x = nx
             self.robot_state.y = ny
-        elif op == "ROTATE":
-            self.robot_state.heading = (self.robot_state.heading + float(parts[1])) % 360.0
+        elif subroutine == "TURN_RIGHT":
+            self.robot_state.heading = (self.robot_state.heading + w_val) % 360.0
+        elif subroutine == "TURN_LEFT":
+            self.robot_state.heading = (self.robot_state.heading - w_val) % 360.0
 
     def drive_command(self, stmt: str) -> None:
         """Append a statement, compile via compile_source(), and update the canvas if valid."""
@@ -326,11 +332,14 @@ class RobotPlaygroundApp:
         prev_text = self.editor.get("1.0", tk.END).rstrip("\n")
         candidate = (prev_text + "\n" + stmt + "\n") if prev_text.strip() else (stmt + "\n")
 
+        check = compile_source(candidate, optimize=True, arena=self.arena)
+        if not check.success:
+            msg = "\n".join(d.format(candidate.splitlines()) for d in check.errors)
+            messagebox.showwarning("Blocked by Compiler", msg, parent=self.root)
+            return
+
         result = self._compile_source_to_tabs(candidate)
         if result is None:
-            bad = compile_source(candidate, optimize=True, arena=self.arena)
-            msg = "\n".join(d.format(candidate.splitlines()) for d in bad.errors)
-            messagebox.showwarning("Blocked by Compiler", msg, parent=self.root)
             return
 
         self.editor.delete("1.0", tk.END)

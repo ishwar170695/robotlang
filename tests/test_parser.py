@@ -54,3 +54,13 @@ def test_parse_unclosed_brace():
     assert len(diags) == 1
     assert "Expected '}'" in diags[0].message
 
+
+def test_parse_def_trailing_comma_recovers_cleanly():
+    src = "DEF f(a, ) { FORWARD a; }\nFORWARD 2;"
+    tokens, _ = lex(src)
+    ast, diags = parse(tokens)
+    assert len(diags) == 1
+    assert "Expected parameter name after ','" in diags[0].message
+    assert len(ast.statements) == 2
+
+

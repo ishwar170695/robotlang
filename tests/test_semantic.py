@@ -56,12 +56,22 @@ def test_semantic_variables_and_procedure_scopes():
 
 
 def test_semantic_warnings_empty_blocks():
-    res = _analyze_src("REPEAT 3 {} IF 1 > 0 {}")
+    res = _analyze_src("REPEAT 3 {} IF 1 > 0 {} ELSE {}")
+    assert not res.has_errors
+    warnings = [d for d in res.diagnostics if d.severity == Severity.WARNING]
+    assert len(warnings) == 3
+    assert any("Empty REPEAT" in w.message for w in warnings)
+    assert any("Empty IF" in w.message for w in warnings)
+    assert any("Empty ELSE" in w.message for w in warnings)
+
+
+def test_semantic_fractional_move_and_turn_warn():
+    res = _analyze_src("FORWARD 2.5; RIGHT 45.5;")
     assert not res.has_errors
     warnings = [d for d in res.diagnostics if d.severity == Severity.WARNING]
     assert len(warnings) == 2
-    assert any("Empty REPEAT" in w.message for w in warnings)
-    assert any("Empty IF" in w.message for w in warnings)
+    assert any("Fractional move distance" in w.message for w in warnings)
+    assert any("Fractional turn angle" in w.message for w in warnings)
 
 
 def test_semantic_loop_arena_violation_deduplicated():

@@ -32,7 +32,7 @@ You can run via `python -m robotlang <command> ...` (or `robotlang <command> ...
 | `ast <file>` | Print the parsed AST | — |
 | `check <file>` | Lex, parse, and run semantic/arena checks | `--arena SIZE` |
 | `ir <file>` | Print structured, unrolled, and optimized IR | `--unrolled`, `--no-opt`, `--arena SIZE` |
-| `asm <file>` | Print generated low-level robot commands | `--no-opt`, `--arena SIZE` |
+| `asm <file>` | Print generated PIC16F877A assembly (`pic-as`) | `--no-opt`, `--arena SIZE` |
 | `run <file>` | Compile, execute in simulator, and print trace | `--no-opt`, `--no-trace`, `--show`, `--save PATH`, `--arena SIZE` |
 | `play [file]` | Launch interactive Tkinter playground GUI | `--arena SIZE` |
 
@@ -44,7 +44,7 @@ You can run via `python -m robotlang <command> ...` (or `robotlang <command> ...
 - `--arena SIZE`: set the square arena width/height (default `100`, i.e. `[-50, 50] x [-50, 50]`).
 
 ```bash
-# Inspect tokens, AST, IR, loop expansion, and generated robot commands
+# Inspect tokens, AST, IR, loop expansion, and generated PIC16F877A assembly
 python -m robotlang tokens examples/valid/square.rbt
 python -m robotlang ast examples/valid/square.rbt
 python -m robotlang ir examples/valid/square.rbt
@@ -78,7 +78,7 @@ python -m robotlang check examples/invalid/missing_semi.rbt
 | Conditionals | `IF expr op expr { ... } [ELSE { ... }]` | Branch using `==`, `!=`, `<`, `<=`, `>`, `>=` |
 | Comments | `# ...` | Single-line comment |
 
-Generated target commands emitted by the backend (`asm` / `run`): `MOVE <distance>` and `ROTATE <degrees>`.
+Generated target output emitted by the backend (`asm` / `run`): Microchip **PIC16F877A** assembly (`pic-as` syntax for MPLAB X Simulator), loading 8-bit integer chunks (`0–255`) into `W` via `MOVLW` and invoking `CALL MOVE_FWD`, `CALL MOVE_BWD`, `CALL TURN_RIGHT`, or `CALL TURN_LEFT` with `PORTB` motor-control subroutines.
 
 See [docs/grammar.md](docs/grammar.md) and [docs/architecture.md](docs/architecture.md) for full specifications.
 
@@ -90,7 +90,7 @@ robotlang/
 │   ├── __main__.py
 │   ├── ast_nodes.py    # AST dataclasses & tree printer
 │   ├── cli.py          # CLI entrypoints (run, play, tokens, ast, ir, asm, check)
-│   ├── codegen.py      # Flat IR -> robot command text
+│   ├── codegen.py      # Flat IR -> PIC16F877A assembly (pic-as)
 │   ├── compiler.py     # End-to-end compilation pipeline
 │   ├── errors.py       # Pos, Severity, Diagnostic formatting
 │   ├── ir.py           # Structured IR, loop unroller, formatter
@@ -99,11 +99,11 @@ robotlang/
 │   ├── parser.py       # Recursive-descent parser + panic-mode recovery
 │   ├── playground.py   # Interactive Tkinter GUI + live Drive Pad
 │   ├── semantic.py     # Symbol table, domain rules, arena bounds
-│   └── simulator.py    # Virtual robot VM, trace table, matplotlib plotter
+│   └── simulator.py    # PIC16 assembly simulator, trace table, matplotlib plotter
 ├── examples/
 │   ├── valid/          # 11 valid .rbt programs
 │   └── invalid/        # 7 invalid .rbt programs (syntax & semantic errors)
-├── tests/              # 42 pytest unit & end-to-end tests
+├── tests/              # 46 pytest unit & end-to-end tests
 └── docs/               # Grammar spec & architecture diagram
 ```
 
@@ -111,8 +111,6 @@ robotlang/
 
 - **Domain & language model**: 2D planar motion only; static expressions/variables resolved at compile time (no runtime sensor input); fixed rectangular arena without internal obstacles.
 - **Static `IF`/`ELSE` branch checking**: Conditions are evaluated statically, so untaken dead branches are not analyzed (which also avoids false positives on guarded checks such as `IF size > 0 { FORWARD size; }`).
-- **Diagnostics & recovery edge cases**: Malformed `DEF` parameter lists (e.g. `DEF f(a, ) { ... }`) can cause panic-mode recovery to spill the body into top-level statements with a trailing unmatched `}`; empty `ELSE {}` blocks do not emit a warning (unlike empty `REPEAT {}` and `IF {}`).
-- **Formatting precision**: IR and target code generation format floats with 6 significant digits (`:g`), rounding values with more than 6 significant digits.
-- **Playground UI edge cases**: A blocked Drive Pad move updates the inspector tabs with the rejected candidate's diagnostics before showing the warning popup, and `robotlang play <missing_file>` falls back to the default script instead of exiting with an error.
+- **Formatting & 8-bit codegen precision**: IR formats floats with 6 significant digits (`:g`), while PIC16F877A code generation rounds fractional move/turn values to integers (emitting a compiler warning) and splits magnitudes greater than 255 into 8-bit `MOVLW` chunks.
 - **Future work**: Obstacle collision polygons, runtime sensor conditionals, ROS / G-code backend targets.
 

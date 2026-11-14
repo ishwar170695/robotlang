@@ -241,6 +241,16 @@ class Parser:
             first = self._consume(TokenType.IDENT, "Expected parameter name")
             params.append(first.lexeme)
             while self._match(TokenType.COMMA) is not None:
+                if self._check(TokenType.RPAREN):
+                    self.diagnostics.append(
+                        Diagnostic(
+                            Severity.ERROR,
+                            "parser",
+                            "Expected parameter name after ','",
+                            self._current().pos,
+                        )
+                    )
+                    break
                 param = self._consume(TokenType.IDENT, "Expected parameter name after ','")
                 params.append(param.lexeme)
         self._consume(TokenType.RPAREN, "Expected ')' after procedure parameters")

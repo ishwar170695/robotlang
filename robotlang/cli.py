@@ -57,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
     p_ir.add_argument("--no-opt", action="store_true", help="Disable optimization")
     p_ir.add_argument("--arena", type=float, default=100.0, help="Square arena size (default: 100)")
 
-    p_asm = sub.add_parser("asm", help="Print generated low-level robot commands")
+    p_asm = sub.add_parser("asm", help="Print generated PIC16F877A assembly")
     add_file_arg(p_asm)
     p_asm.add_argument("--no-opt", action="store_true", help="Disable optimization")
     p_asm.add_argument("--arena", type=float, default=100.0, help="Square arena size (default: 100)")
@@ -77,6 +77,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "play":
+        if args.file is not None:
+            _read_source(args.file)
         from robotlang.playground import launch_playground
 
         return launch_playground(initial_file=args.file, arena=ArenaConfig.from_size(args.arena))
@@ -139,14 +141,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "asm":
         if result.opt_stats is not None:
-            print(f"# {result.opt_stats.summary()}")
+            print(f"; {result.opt_stats.summary()}")
         print("\n".join(result.commands))
         return 0
 
     if args.command == "run":
         if result.opt_stats is not None:
             print(result.opt_stats.summary())
-        print("\n--- Generated Robot Commands ---")
+        print("\n--- Generated PIC16F877A Assembly ---")
         print("\n".join(result.commands) if result.commands else "(no commands)")
 
         sim = simulate_commands(result.commands)

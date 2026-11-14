@@ -43,50 +43,113 @@ class SimulationResult:
 
     def format_trace(self) -> str:
         lines = [
-            f"{'Step':>4} | {'Command':<16} | {'Position (x, y)':<20} | {'Heading':>7}",
-            "-" * 58,
+            f"{'Step':>4} | {'PIC16 Instruction':<28} | {'Position (x, y)':<20} | {'Heading':>7}",
+            "-" * 70,
         ]
         for t in self.trace:
             pos_str = f"({t.x:>7.2f}, {t.y:>7.2f})"
             lines.append(
-                f"{t.step:>4} | {t.command:<16} | {pos_str:<20} | {t.heading:>6.1f}°"
+                f"{t.step:>4} | {t.command:<28} | {pos_str:<20} | {t.heading:>6.1f}°"
             )
         return "\n".join(lines)
 
 
+_IGNORED_DIRECTIVES = {
+    "PROCESSOR",
+    "#INCLUDE",
+    "PSECT",
+    "ORG",
+    "BANKSEL",
+    "CLRF",
+    "END",
+}
+_MOTOR_SUBROUTINES = {"MOVE_FWD", "MOVE_BWD", "TURN_RIGHT", "TURN_LEFT"}
+
+
+def extract_pic_actions(commands: list[str] | str) -> list[tuple[str, float, str]]:
+    """Parse PIC16F877A assembly lines and extract (subroutine, W, display_label) steps."""
+    raw_lines = commands.splitlines() if isinstance(commands, str) else list(commands)
+    w_reg: float | None = None
+    actions: list[tuple[str, float, str]] = []
+
+    for raw_line in raw_lines:
+        line = raw_line.split(";", 1)[0].strip()
+        if not line:
+            continue
+
+        first_tok = line.split(None, 1)[0]
+        if ":" in first_tok:
+            label, rest = line.split(":", 1)
+            if label.strip().upper() == "STOP":
+                break
+            line = rest.strip()
+            if not line:
+                continue
+
+        parts = line.split()
+        op = parts[0].upper()
+
+        if op in _IGNORED_DIRECTIVES:
+            continue
+
+        if op == "GOTO":
+            if len(parts) != 2:
+                raise ValueError(f"Invalid GOTO instruction: {line!r}")
+            target = parts[1].upper()
+            if target == "STOP":
+                break
+            if target == "START":
+                continue
+            raise ValueError(f"Unsupported GOTO target in PIC16 assembly: {line!r}")
+
+        if op == "MOVLW":
+            if len(parts) != 2:
+                raise ValueError(f"Invalid MOVLW instruction: {line!r}")
+            val = int(parts[1], 0)
+            if not (0 <= val <= 255):
+                raise ValueError(f"MOVLW operand out of 8-bit range (0..255): {val}")
+            w_reg = float(val)
+        elif op == "CALL":
+            if len(parts) != 2:
+                raise ValueError(f"Invalid CALL instruction: {line!r}")
+            sub = parts[1].upper()
+            if sub not in _MOTOR_SUBROUTINES:
+                raise ValueError(f"Unknown PIC16 subroutine: {parts[1]!r}")
+            if w_reg is None:
+                raise ValueError(f"CALL {sub} without prior MOVLW to load W register")
+            actions.append((sub, w_reg, f"MOVLW {int(w_reg)} -> CALL {sub}"))
+        else:
+            raise ValueError(f"Invalid or unsupported PIC16 instruction: {line!r}")
+
+    return actions
+
+
 def simulate_commands(commands: list[str] | str) -> SimulationResult:
-    """Execute low-level robot commands in the virtual robot simulator."""
-    if isinstance(commands, str):
-        cmd_list = [line.strip() for line in commands.splitlines() if line.strip()]
-    else:
-        cmd_list = [cmd.strip() for cmd in commands if cmd.strip()]
+    """Execute PIC16F877A assembly instructions in the virtual robot simulator."""
+    actions = extract_pic_actions(commands)
 
     state = RobotState()
     segments: list[Segment] = []
     trace: list[TraceStep] = []
 
-    for idx, cmd in enumerate(cmd_list, start=1):
-        parts = cmd.split()
-        op = parts[0].upper()
-
-        if op == "MOVE" and len(parts) == 2:
-            d = float(parts[1])
+    for idx, (subroutine, w_val, label) in enumerate(actions, start=1):
+        if subroutine in ("MOVE_FWD", "MOVE_BWD"):
+            d = w_val if subroutine == "MOVE_FWD" else -w_val
             rad = math.radians(state.heading)
             nx = state.x + d * math.sin(rad)
             ny = state.y + d * math.cos(rad)
             segments.append(Segment(state.x, state.y, nx, ny))
             state.x = nx
             state.y = ny
-        elif op == "ROTATE" and len(parts) == 2:
-            deg = float(parts[1])
-            state.heading = (state.heading + deg) % 360.0
-        else:
-            raise ValueError(f"Invalid robot command: {cmd!r}")
+        elif subroutine == "TURN_RIGHT":
+            state.heading = (state.heading + w_val) % 360.0
+        elif subroutine == "TURN_LEFT":
+            state.heading = (state.heading - w_val) % 360.0
 
         trace.append(
             TraceStep(
                 step=idx,
-                command=cmd,
+                command=label,
                 x=0.0 if abs(state.x) < 1e-12 else state.x,
                 y=0.0 if abs(state.y) < 1e-12 else state.y,
                 heading=0.0 if abs(state.heading) < 1e-12 else state.heading,
